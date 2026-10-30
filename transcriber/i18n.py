@@ -26,6 +26,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "tagline": "Turn audio and video into subtitles",
         "settings": "Settings",
+        "tab_subtitles": "Subtitles",
         "drop_title": "Drop audio or video files here",
         "drop_hint": "or click to browse  ·  MP4, MOV, MKV, MP3, WAV, M4A and more",
         "queue": "Queue",
@@ -221,6 +222,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "de": {
         "tagline": "Audio und Video in Untertitel verwandeln",
         "settings": "Einstellungen",
+        "tab_subtitles": "Untertitel",
         "drop_title": "Audio- oder Videodateien hier ablegen",
         "drop_hint": "oder klicken zum Durchsuchen  ·  MP4, MOV, MKV, MP3, WAV, M4A und mehr",
         "queue": "Warteschlange",
@@ -416,6 +418,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "es": {
         "tagline": "Convierte audio y vídeo en subtítulos",
         "settings": "Ajustes",
+        "tab_subtitles": "Subtítulos",
         "drop_title": "Suelta aquí archivos de audio o vídeo",
         "drop_hint": "o haz clic para buscar  ·  MP4, MOV, MKV, MP3, WAV, M4A y más",
         "queue": "Cola",
@@ -611,6 +614,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "fr": {
         "tagline": "Transformez l'audio et la vidéo en sous-titres",
         "settings": "Paramètres",
+        "tab_subtitles": "Sous-titres",
         "drop_title": "Déposez vos fichiers audio ou vidéo ici",
         "drop_hint": "ou cliquez pour parcourir  ·  MP4, MOV, MKV, MP3, WAV, M4A et plus",
         "queue": "File d'attente",
@@ -806,6 +810,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "it": {
         "tagline": "Trasforma audio e video in sottotitoli",
         "settings": "Impostazioni",
+        "tab_subtitles": "Sottotitoli",
         "drop_title": "Trascina qui file audio o video",
         "drop_hint": "o fai clic per sfogliare  ·  MP4, MOV, MKV, MP3, WAV, M4A e altri",
         "queue": "Coda",
@@ -1001,6 +1006,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "nl": {
         "tagline": "Zet audio en video om in ondertitels",
         "settings": "Instellingen",
+        "tab_subtitles": "Ondertitels",
         "drop_title": "Sleep audio- of videobestanden hierheen",
         "drop_hint": "of klik om te bladeren  ·  MP4, MOV, MKV, MP3, WAV, M4A en meer",
         "queue": "Wachtrij",
@@ -1196,6 +1202,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "pl": {
         "tagline": "Zamieniaj audio i wideo na napisy",
         "settings": "Ustawienia",
+        "tab_subtitles": "Napisy",
         "drop_title": "Upuść tutaj pliki audio lub wideo",
         "drop_hint": "lub kliknij, aby przeglądać  ·  MP4, MOV, MKV, MP3, WAV, M4A i inne",
         "queue": "Kolejka",
@@ -1391,6 +1398,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "pt": {
         "tagline": "Transforme áudio e vídeo em legendas",
         "settings": "Configurações",
+        "tab_subtitles": "Legendas",
         "drop_title": "Solte arquivos de áudio ou vídeo aqui",
         "drop_hint": "ou clique para procurar  ·  MP4, MOV, MKV, MP3, WAV, M4A e mais",
         "queue": "Fila",
@@ -1586,6 +1594,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "ja": {
         "tagline": "音声や動画を字幕に変換",
         "settings": "設定",
+        "tab_subtitles": "字幕",
         "drop_title": "音声・動画ファイルをここにドロップ",
         "drop_hint": "またはクリックして選択  ·  MP4、MOV、MKV、MP3、WAV、M4A など",
         "queue": "キュー",
@@ -1781,6 +1790,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "ko": {
         "tagline": "오디오와 동영상을 자막으로 변환",
         "settings": "설정",
+        "tab_subtitles": "자막",
         "drop_title": "오디오 또는 동영상 파일을 여기에 놓으세요",
         "drop_hint": "또는 클릭하여 찾아보기  ·  MP4, MOV, MKV, MP3, WAV, M4A 등",
         "queue": "대기열",
@@ -1976,6 +1986,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "zh": {
         "tagline": "将音频和视频转换为字幕",
         "settings": "设置",
+        "tab_subtitles": "字幕",
         "drop_title": "将音频或视频文件拖放到此处",
         "drop_hint": "或点击浏览  ·  MP4、MOV、MKV、MP3、WAV、M4A 等",
         "queue": "队列",

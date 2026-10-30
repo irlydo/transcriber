@@ -1,5 +1,5 @@
 """Caption Studio: transcribe a short video, check the captions while it plays, style and animate them,
-then render a copy of the video with the captions burned in."""
+then render a copy of the video with the captions burned in. A page (tab) of the main window."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from tkinter import colorchooser, filedialog, messagebox
 
 import customtkinter as ctk
 from PIL import ImageTk
-from tkinterdnd2 import DND_FILES
 
 from .app import (ACCENT, ACCENT_HOVER, ACCENT_TEXT, CARD, ERR, MENU_KW, MONO_FONT, MUTED, OK, OUTLINE_BTN_KW,
                   SURFACE, TEXT_FONT, TITLE_FONT, VIDEO_EXTS, hint, save_settings, section,
@@ -20,7 +19,7 @@ from .app import (ACCENT, ACCENT_HOVER, ACCENT_TEXT, CARD, ERR, MENU_KW, MONO_FO
 from .captions import (ANIMATIONS, LOOKS, WORD_EFFECTS, Caption, Look, Renderer, all_words, available_fonts,
                        caption_at, group_words, retext, retime, spread)
 from .i18n import SPOKEN_LANGUAGES, t
-from .paths import DATA_DIR, ICON
+from .paths import DATA_DIR
 from .subtitles import PRESETS, Cue, Word, wrap, write_srt
 
 SESSION_PATH = os.path.join(DATA_DIR, "studio_session.json")
@@ -80,16 +79,10 @@ class CaptionRow(ctk.CTkFrame):
             self.configure(fg_color=fill, border_color=ACCENT if selected else fill)
 
 
-class StudioWindow(ctk.CTkToplevel):
-    def __init__(self, app) -> None:
-        super().__init__(app)
+class StudioPage(ctk.CTkFrame):
+    def __init__(self, master, app) -> None:
+        super().__init__(master, fg_color="transparent")
         self.app = app
-        self.title(t("studio_title"))
-        self.geometry("1420x880")
-        self.minsize(1180, 720)
-        self.configure(fg_color=SURFACE)
-        if os.path.exists(ICON):
-            self.after(250, lambda: self.iconbitmap(ICON))
 
         self.info = None
         self.player = None
@@ -126,29 +119,20 @@ class StudioWindow(ctk.CTkToplevel):
         self._build_style()
         self._sync_controls()
 
-        self.drop_target_register(DND_FILES)
-        self.dnd_bind("<<Drop>>", self._on_drop)
+        # Files dropped on the window come in through App._on_drop.
         for key, action in (("<space>", lambda: self._toggle_play()),
                             ("<Left>", lambda: self._nudge(-1.0)), ("<Right>", lambda: self._nudge(1.0)),
                             ("<Shift-Left>", lambda: self._nudge(-0.1)), ("<Shift-Right>", lambda: self._nudge(0.1)),
                             ("<Up>", lambda: self._step_caption(-1)), ("<Down>", lambda: self._step_caption(1))):
-            self.bind(key, lambda e, a=action: self._shortcut(e, a))
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
+            self.winfo_toplevel().bind(key, lambda e, a=action: self._shortcut(e, a), add="+")
         self.after(15, self._tick)
-        self.after(100, self._take_focus)
-
-    def _take_focus(self) -> None:
-        self.lift()
-        self.focus_force()
 
     # ---------- layout ----------
 
     def _build_header(self) -> None:
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, columnspan=3, sticky="ew", padx=20, pady=(16, 10))
+        header.grid(row=0, column=0, columnspan=3, sticky="ew", padx=20, pady=(0, 10))
         header.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(header, text=t("studio_title"), font=ctk.CTkFont(family=TITLE_FONT, size=26)) \
-            .grid(row=0, column=0, sticky="w", padx=(0, 18))
         self.file_label = ctk.CTkLabel(header, text=t("studio_tagline"), text_color=MUTED, anchor="w",
                                        font=ctk.CTkFont(size=13))
         self.file_label.grid(row=0, column=1, sticky="ew")
@@ -961,8 +945,8 @@ class StudioWindow(ctk.CTkToplevel):
             self.player.seek(self.player.position() + seconds)
 
     def _shortcut(self, event, action) -> None:
-        # Leave keys alone while typing.
-        if isinstance(event.widget, (tk.Entry, tk.Text)):
+        # Only while this tab is showing, and leave keys alone while typing.
+        if not self.winfo_ismapped() or isinstance(event.widget, (tk.Entry, tk.Text)):
             return
         action()
 
@@ -1095,10 +1079,16 @@ class StudioWindow(ctk.CTkToplevel):
 
     # ---------- closing ----------
 
-    def _on_close(self) -> None:
+    def hidden(self) -> None:
+        """Another tab was chosen."""
+        if self.player is not None:
+            self.player.pause()
+
+    def close(self) -> bool:
+        """The app is closing: stop work and keep the edits. False if the user wants to keep rendering."""
         if self._task_running() and self.task_kind == "render":
             if not messagebox.askyesno(t("render_video"), t("stop_render_confirm"), parent=self):
-                return
+                return False
         self.cancel.set()
         if self._session_job is not None:
             self.after_cancel(self._session_job)
@@ -1106,5 +1096,4 @@ class StudioWindow(ctk.CTkToplevel):
         if self.player is not None:
             self.player.close()
             self.player = None
-        self.app.studio = None
-        self.destroy()
+        return True

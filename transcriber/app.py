@@ -385,24 +385,32 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.transcriber = None  # created once the engine has loaded
         self.translator = None  # created the first time captions are translated
         self.settings_dialog: SettingsDialog | None = None
-        self.studio = None  # the Caption Studio window, while open
+        self.studio = None  # the Caption Studio page
         self.has_gpu = False  # an NVIDIA card is present (known once the engine thread checks)
         self.gpu_dl = {"state": "idle", "done": 0, "total": 0, "error": ""}  # idle|downloading|done|error
         self.gpu_cancel = threading.Event()
         self.update_path = ""  # a downloaded installer for a newer version, run on restart
 
         self.title(APP_NAME)
-        self.geometry("1100x780")
-        self.minsize(900, 640)
+        self.geometry("1420x900")
+        self.minsize(1180, 740)
         self.configure(fg_color=SURFACE)
         if os.path.exists(ICON):
             self.iconbitmap(ICON)
             self.after(300, lambda: self.iconbitmap(ICON))  # CTk resets the icon on startup
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        self._build_main()
-        self._build_sidebar()
+        self.grid_rowconfigure(1, weight=1)
+        self._build_topbar()
+        # The subtitles page: drop zone, queue and transcript on the left, settings on the right.
+        self.subtitles_page = ctk.CTkFrame(self, fg_color="transparent")
+        self.subtitles_page.grid_columnconfigure(0, weight=1)
+        self.subtitles_page.grid_rowconfigure(0, weight=1)
+        self._build_main(self.subtitles_page)
+        self._build_sidebar(self.subtitles_page)
+        from .studio import StudioPage
+        self.studio = StudioPage(self, self)
+        self._show_tab("studio")  # Caption Studio comes first
 
         self.drop_target_register(DND_FILES)
         self.dnd_bind("<<Drop>>", self._on_drop)
@@ -417,26 +425,39 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
     # ---------- layout ----------
 
-    def _build_main(self) -> None:
-        main = ctk.CTkFrame(self, fg_color="transparent")
-        main.grid(row=0, column=0, sticky="nsew", padx=(20, 10), pady=20)
+    def _build_topbar(self) -> None:
+        bar = ctk.CTkFrame(self, fg_color="transparent")
+        bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(16, 12))
+        bar.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(bar, text=APP_NAME, font=ctk.CTkFont(family=TITLE_FONT, size=28)) \
+            .grid(row=0, column=0, sticky="w", padx=(0, 24))
+        self.tabs = {t("caption_studio"): "studio", t("tab_subtitles"): "subtitles"}
+        self.tab_var = ctk.StringVar()
+        ctk.CTkSegmentedButton(bar, values=list(self.tabs), variable=self.tab_var, height=34, width=320,
+                               selected_color=ACCENT, selected_hover_color=ACCENT_HOVER,
+                               font=ctk.CTkFont(size=14), command=lambda v: self._show_tab(self.tabs[v])) \
+            .grid(row=0, column=1, sticky="w")
+        ctk.CTkButton(bar, text=f"⚙  {t('settings')}", width=110, command=self._open_settings,
+                      **{**OUTLINE_BTN_KW, "height": 32}) \
+            .grid(row=0, column=2, sticky="e")
+
+    def _show_tab(self, tab: str) -> None:
+        self.tab = tab
+        self.tab_var.set(next(label for label, name in self.tabs.items() if name == tab))
+        if tab == "studio":
+            self.subtitles_page.grid_remove()
+            self.studio.grid(row=1, column=0, sticky="nsew")
+        else:
+            self.studio.hidden()
+            self.studio.grid_remove()
+            self.subtitles_page.grid(row=1, column=0, sticky="nsew")
+
+    def _build_main(self, page) -> None:
+        main = ctk.CTkFrame(page, fg_color="transparent")
+        main.grid(row=0, column=0, sticky="nsew", padx=(20, 10), pady=(0, 20))
         main.grid_columnconfigure(0, weight=1)
         main.grid_rowconfigure(2, weight=3)
         main.grid_rowconfigure(4, weight=2)
-
-        header = ctk.CTkFrame(main, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 14))
-        header.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(header, text=APP_NAME, font=ctk.CTkFont(family=TITLE_FONT, size=30)) \
-            .grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(header, text=t("tagline"), text_color=MUTED, font=ctk.CTkFont(size=13)) \
-            .grid(row=1, column=0, sticky="w")
-        ctk.CTkButton(header, text=f"🎬  {t('caption_studio')}", width=150, height=32, command=self.open_studio,
-                      fg_color=ACCENT, hover_color=ACCENT_HOVER) \
-            .grid(row=0, column=1, rowspan=2, sticky="e", padx=(0, 8))
-        ctk.CTkButton(header, text=f"⚙  {t('settings')}", width=110, command=self._open_settings,
-                      **{**OUTLINE_BTN_KW, "height": 32}) \
-            .grid(row=0, column=2, rowspan=2, sticky="e")
 
         self.drop = ctk.CTkFrame(main, height=150, corner_radius=14, border_width=2,
                                  border_color=("gray75", "gray30"), fg_color=CARD, cursor="hand2")
@@ -474,9 +495,9 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.preview.grid(row=4, column=0, sticky="nsew")
         self.preview.configure(state="disabled")
 
-    def _build_sidebar(self) -> None:
-        side = ctk.CTkFrame(self, width=320, fg_color=CARD, corner_radius=14)
-        side.grid(row=0, column=1, sticky="ns", padx=(10, 20), pady=20)
+    def _build_sidebar(self, page) -> None:
+        side = ctk.CTkFrame(page, width=320, fg_color=CARD, corner_radius=14)
+        side.grid(row=0, column=1, sticky="ns", padx=(10, 20), pady=(0, 20))
         side.grid_propagate(False)
         side.grid_columnconfigure(0, weight=1)
 
@@ -643,15 +664,6 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         else:
             self.settings_dialog = SettingsDialog(self)
 
-    def open_studio(self) -> None:
-        if self.studio is not None and self.studio.winfo_exists():
-            self.studio.deiconify()
-            self.studio.lift()
-            self.studio.focus_force()
-            return
-        from .studio import StudioWindow
-        self.studio = StudioWindow(self)
-
     def models_dir(self) -> str:
         return self.settings["models_dir"] or default_models_dir()
 
@@ -734,6 +746,9 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
     def _on_drop(self, event) -> None:
         self._highlight_drop(False)
+        if self.tab == "studio":
+            self.studio._on_drop(event)
+            return
         paths = []
         for p in self.tk.splitlist(event.data):
             if os.path.isdir(p):
@@ -744,6 +759,8 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self._add_files(paths)
 
     def _highlight_drop(self, on: bool) -> None:
+        if self.tab != "subtitles":
+            return
         self.drop.configure(border_color=ACCENT if on else ("gray75", "gray30"))
 
     def _add_files(self, paths) -> None:
@@ -993,11 +1010,9 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.status_label.configure(text=text)
 
     def _on_close(self) -> None:
+        if not self.studio.close():
+            return
         self.cancel.set()
-        if self.studio is not None:
-            self.studio.cancel.set()
-            if self.studio.player is not None:
-                self.studio.player.close()
         self.destroy()
         exit_now()
 
