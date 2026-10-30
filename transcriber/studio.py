@@ -14,8 +14,9 @@ import customtkinter as ctk
 from PIL import ImageTk
 from tkinterdnd2 import DND_FILES
 
-from .app import (ACCENT, ACCENT_HOVER, ACCENT_TEXT, CARD, ERR, MENU_KW, MUTED, OK, OUTLINE_BTN_KW, SURFACE,
-                  TITLE_FONT, UI_FONT, VIDEO_EXTS, hint, save_settings, section, show_in_explorer, unique_path)
+from .app import (ACCENT, ACCENT_HOVER, ACCENT_TEXT, CARD, ERR, MENU_KW, MONO_FONT, MUTED, OK, OUTLINE_BTN_KW,
+                  SURFACE, TEXT_FONT, TITLE_FONT, VIDEO_EXTS, hint, save_settings, section,
+                  show_in_explorer, unique_path)
 from .captions import (ANIMATIONS, LOOKS, WORD_EFFECTS, Caption, Look, Renderer, all_words, available_fonts,
                        caption_at, group_words, retext, retime, spread)
 from .i18n import SPOKEN_LANGUAGES, t
@@ -58,10 +59,10 @@ class CaptionRow(ctk.CTkFrame):
         self.index = -1
         self.grid_columnconfigure(1, weight=1)
         self.time = ctk.CTkLabel(self, text="", text_color=MUTED, width=64, anchor="w",
-                                 font=ctk.CTkFont(size=11, family="Consolas"))
+                                 font=ctk.CTkFont(size=11, family=MONO_FONT))
         self.time.grid(row=0, column=0, padx=(10, 6), pady=6, sticky="nw")
         self.text = ctk.CTkLabel(self, text="", anchor="w", justify="left", wraplength=300,
-                                 font=ctk.CTkFont(size=13))
+                                 font=ctk.CTkFont(family=TEXT_FONT, size=14))
         self.text.grid(row=0, column=1, padx=(0, 10), pady=6, sticky="ew")
         for w in (self, self.time, self.text):
             w.bind("<Button-1>", lambda e: on_click(self.index))
@@ -174,7 +175,7 @@ class StudioWindow(ctk.CTkToplevel):
                                       font=ctk.CTkFont(size=15), command=self._toggle_play, state="disabled")
         self.play_btn.grid(row=0, column=0)
         self.time_label = ctk.CTkLabel(bar, text="0:00.00 / 0:00.00", width=130,
-                                       font=ctk.CTkFont(size=12, family="Consolas"))
+                                       font=ctk.CTkFont(size=12, family=MONO_FONT))
         self.time_label.grid(row=0, column=1, padx=8)
         self.scrub = ctk.CTkSlider(bar, from_=0, to=1, button_color=ACCENT, button_hover_color=ACCENT_HOVER,
                                    progress_color=ACCENT, command=self._on_scrub, state="disabled")
@@ -192,7 +193,7 @@ class StudioWindow(ctk.CTkToplevel):
         top = ctk.CTkFrame(box, fg_color="transparent")
         top.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 0))
         top.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(top, text=t("captions"), font=ctk.CTkFont(size=15, weight="bold")) \
+        ctk.CTkLabel(top, text=t("captions"), font=ctk.CTkFont(family=TITLE_FONT, size=18)) \
             .grid(row=0, column=0, sticky="w")
         self.lang_labels = {t("auto_detect"): "auto", **{name: code for code, name in SPOKEN_LANGUAGES.items()}}
         lang = self.app.settings["language"]
@@ -214,7 +215,8 @@ class StudioWindow(ctk.CTkToplevel):
 
         self.editor = ctk.CTkFrame(box, fg_color=SURFACE, corner_radius=10)
         self.editor.grid_columnconfigure(0, weight=1)
-        self.edit_text = ctk.CTkTextbox(self.editor, height=58, wrap="word", font=ctk.CTkFont(size=15),
+        self.edit_text = ctk.CTkTextbox(self.editor, height=58, wrap="word",
+                                        font=ctk.CTkFont(family=TEXT_FONT, size=16),
                                         fg_color=CARD, border_width=1, border_color=("gray75", "gray30"))
         self.edit_text.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 6))
         self.edit_text.bind("<KeyRelease>", lambda e: self._on_text_edit())
@@ -226,7 +228,7 @@ class StudioWindow(ctk.CTkToplevel):
         self.start_var, self.end_var = tk.StringVar(), tk.StringVar()
         for col, (key, var, which) in enumerate((("start", self.start_var, "start"), ("end", self.end_var, "end"))):
             ctk.CTkLabel(times, text=t(key), font=ctk.CTkFont(size=12)).grid(row=0, column=col * 3, padx=(0 if col == 0 else 14, 4))
-            entry = ctk.CTkEntry(times, textvariable=var, width=78, font=ctk.CTkFont(size=12, family="Consolas"))
+            entry = ctk.CTkEntry(times, textvariable=var, width=78, font=ctk.CTkFont(size=12, family=MONO_FONT))
             entry.grid(row=0, column=col * 3 + 1)
             entry.bind("<Return>", lambda e: self._apply_times())
             entry.bind("<FocusOut>", lambda e: self._apply_times())
@@ -985,7 +987,7 @@ class StudioWindow(ctk.CTkToplevel):
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
         self.canvas.create_text(cw / 2, ch / 2 - 16, text="🎬", font=("Segoe UI Emoji", 30), fill=ACCENT_TEXT[1])
         self.canvas.create_text(cw / 2, ch / 2 + 26, text=t("studio_drop"), fill="#9A9AA5",
-                                font=(UI_FONT, 12), width=max(100, cw - 40), justify="center")
+                                font=(TITLE_FONT, 15), width=max(100, cw - 40), justify="center")
 
     def _tick(self) -> None:
         try:

@@ -18,6 +18,7 @@ linked project for the full license text.
 | Other codecs in PyAV's FFmpeg build: libaom, dav1d, SVT-AV1, libvpx, libwebp, Opus, Vorbis, Speex, LAME, TwoLAME, OpenCORE AMR, OpenH264, SRT, GMP, libiconv, zlib, OpenSSL, MinGW runtime | BSD / LGPL / Apache-2.0 and similar | see https://github.com/PyAV-Org/pyav-ffmpeg |
 | ONNX Runtime | MIT | https://onnxruntime.ai |
 | DM Sans font | SIL Open Font License 1.1 | https://github.com/googlefonts/dm-fonts |
+| DM Mono font | SIL Open Font License 1.1 | https://github.com/googlefonts/dm-mono |
 | Source Serif 4 font | SIL Open Font License 1.1 | https://github.com/adobe-fonts/source-serif |
 | CustomTkinter | CC0-1.0 | https://github.com/TomSchimansky/CustomTkinter |
 | darkdetect | BSD-3-Clause | https://github.com/albertosottile/darkdetect |

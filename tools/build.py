@@ -73,10 +73,14 @@ def check_publishable(gh: str, version: str) -> None:
 def publish(gh: str, version: str) -> None:
     print(f"== Publishing v{version} to {update_repo()}")
     git("push", "origin", "HEAD")
-    subprocess.run([gh, "release", "create", f"v{version}", "--repo", update_repo(), "--target", git("rev-parse", "HEAD"),
-                    "--title", f"Transcriber {version}", "--generate-notes",
-                    os.path.join(DIST, f"Transcriber-Setup-{version}.exe"),
-                    os.path.join(DIST, f"Transcriber-{version}-portable.zip")], check=True)
+    setup = os.path.join(DIST, f"Transcriber-Setup-{version}.exe")
+    # A fixed name too, so .../releases/latest/download/Transcriber-Setup.exe (the README's download
+    # button) always gets the newest installer. The updater only looks at the versioned name.
+    latest = os.path.join(DIST, "Transcriber-Setup.exe")
+    shutil.copy(setup, latest)
+    subprocess.run([gh, "release", "create", f"v{version}", "--repo", update_repo(),
+                    "--target", git("rev-parse", "HEAD"), "--title", f"Transcriber {version}", "--generate-notes",
+                    setup, latest, os.path.join(DIST, f"Transcriber-{version}-portable.zip")], check=True)
 
 
 def find_iscc() -> str:

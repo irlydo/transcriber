@@ -47,9 +47,12 @@ ERR = "#FF6B6B"
 MUTED = ("gray40", "gray60")
 CARD = ("gray92", "#141414")
 SURFACE = ("gray97", "#0A0A0A")
-# Bundled fonts (assets/fonts, SIL Open Font License): a serif for titles, a geometric sans for the rest.
+# Bundled fonts (assets/fonts, SIL Open Font License): a serif for headings and for transcript/caption text,
+# a geometric sans for controls and labels, and a matching mono for timecodes.
 UI_FONT = "DM Sans"
 TITLE_FONT = "Source Serif 4 Semibold"
+TEXT_FONT = "Source Serif 4"
+MONO_FONT = "DM Mono"
 
 DEFAULT_SETTINGS = {
     "model": "large-v3-turbo",
@@ -144,8 +147,8 @@ def translated_cues(cues: list[Cue], texts: list[str], style: CaptionStyle) -> l
 
 
 def section(parent, text: str) -> None:
-    ctk.CTkLabel(parent, text=text.upper(), text_color=MUTED,
-                 font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w", padx=12, pady=(12, 2))
+    ctk.CTkLabel(parent, text=text, font=ctk.CTkFont(family=TITLE_FONT, size=16)) \
+        .pack(anchor="w", padx=12, pady=(14, 2))
 
 
 def label(parent, text: str) -> None:
@@ -288,7 +291,7 @@ class SettingsDialog(ctk.CTkToplevel):
     def _build_gpu_pack(self, body) -> None:
         box = ctk.CTkFrame(body, fg_color=SURFACE, corner_radius=10)
         box.pack(fill="x", padx=12, pady=(10, 0))
-        ctk.CTkLabel(box, text=t("gpu_pack_title"), font=ctk.CTkFont(size=13, weight="bold")) \
+        ctk.CTkLabel(box, text=t("gpu_pack_title"), font=ctk.CTkFont(family=TITLE_FONT, size=15)) \
             .pack(anchor="w", padx=12, pady=(10, 0))
         self.gpu_text = ctk.CTkLabel(box, text="", font=ctk.CTkFont(size=12), justify="left",
                                      wraplength=360, anchor="w")
@@ -443,7 +446,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.drop.grid_rowconfigure((0, 4), weight=1)
         widgets = [
             ctk.CTkLabel(self.drop, text="⬆", font=ctk.CTkFont(size=30), text_color=ACCENT_TEXT),
-            ctk.CTkLabel(self.drop, text=t("drop_title"), font=ctk.CTkFont(size=16, weight="bold")),
+            ctk.CTkLabel(self.drop, text=t("drop_title"), font=ctk.CTkFont(family=TITLE_FONT, size=19)),
             ctk.CTkLabel(self.drop, text=t("drop_hint"), text_color=MUTED, font=ctk.CTkFont(size=12)),
         ]
         for i, w in enumerate(widgets, 1):
@@ -453,7 +456,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         qhead = ctk.CTkFrame(main, fg_color="transparent")
         qhead.grid(row=2, column=0, sticky="new", pady=(18, 0))
-        ctk.CTkLabel(qhead, text=t("queue"), font=ctk.CTkFont(size=15, weight="bold")).pack(side="left")
+        ctk.CTkLabel(qhead, text=t("queue"), font=ctk.CTkFont(family=TITLE_FONT, size=18)).pack(side="left")
         ctk.CTkButton(qhead, text=t("clear_finished"), width=110, height=26, fg_color="transparent",
                       border_width=1, border_color=("gray70", "gray30"), text_color=("gray20", "gray80"),
                       hover_color=("gray85", "gray20"), command=self._clear_finished).pack(side="right")
@@ -464,10 +467,10 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.empty_label = ctk.CTkLabel(self.queue_frame, text=t("no_files"), text_color=MUTED)
         self.empty_label.grid(row=0, column=0, pady=30)
 
-        ctk.CTkLabel(main, text=t("live_transcript"), font=ctk.CTkFont(size=15, weight="bold")) \
+        ctk.CTkLabel(main, text=t("live_transcript"), font=ctk.CTkFont(family=TITLE_FONT, size=18)) \
             .grid(row=3, column=0, sticky="w", pady=(14, 6))
         self.preview = ctk.CTkTextbox(main, fg_color=CARD, corner_radius=10, wrap="word",
-                                      font=ctk.CTkFont(size=13))
+                                      font=ctk.CTkFont(family=TEXT_FONT, size=15))
         self.preview.grid(row=4, column=0, sticky="nsew")
         self.preview.configure(state="disabled")
 
