@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import glob
 import json
 import os
 import queue
@@ -15,11 +16,11 @@ from tkinter import filedialog
 import customtkinter as ctk
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
-from . import __version__, gpu_pack
+from . import __version__, gpu_pack, updater
 from .engine_info import MODELS
 from .i18n import SPOKEN_LANGUAGES, UI_LANGUAGES, current_language, set_language, system_language, t
-from .paths import APP_NAME, DATA_DIR, ICON, SETTINGS_DIR, default_models_dir, restart_command
-from .subtitles import PRESETS, CaptionStyle, write_srt
+from .paths import APP_NAME, DATA_DIR, FONT_DIR, ICON, SETTINGS_DIR, default_models_dir, restart_command
+from .subtitles import PRESETS, CaptionStyle, Cue, wrap, write_srt
 
 SETTINGS_PATH = os.path.join(SETTINGS_DIR, "settings.json")
 
@@ -38,25 +39,29 @@ PRESET_TEXT = {
 }
 APPEARANCES = {"system": "appearance_system", "light": "appearance_light", "dark": "appearance_dark"}
 
-ACCENT = "#7C5CFF"
-ACCENT_HOVER = "#6846F5"
+ACCENT = "#A4161A"                 # dark red: buttons, switches, selections
+ACCENT_HOVER = "#7F1014"
+ACCENT_TEXT = ("#A4161A", "#E5484D")  # red text, brighter on black so it stays readable
 OK = "#3DDC97"
 ERR = "#FF6B6B"
 MUTED = ("gray40", "gray60")
-CARD = ("gray92", "#1E1E24")
-SURFACE = ("gray97", "#16161A")
+CARD = ("gray92", "#141414")
+SURFACE = ("gray97", "#0A0A0A")
+# Bundled fonts (assets/fonts, SIL Open Font License): a serif for titles, a geometric sans for the rest.
+UI_FONT = "DM Sans"
+TITLE_FONT = "Source Serif 4 Semibold"
 
 DEFAULT_SETTINGS = {
     "model": "large-v3-turbo",
     "language": "auto",
-    "translate": False,
+    "translate_to": "",  # subtitle language; "" = as spoken
     "preset": "Standard",
     "max_chars": 42,
     "max_lines": 2,
     "save_txt": False,
     "output_dir": "",
     "ui_language": "system",
-    "appearance": "system",
+    "appearance": "dark",
     "use_gpu": True,
     "models_dir": "",
     "caption_look": {},
@@ -69,6 +74,13 @@ OUTLINE_BTN_KW = dict(height=28, fg_color="transparent", border_width=1, border_
                       text_color=("gray20", "gray80"), hover_color=("gray85", "gray25"))
 
 
+def load_fonts() -> None:
+    """Make the bundled fonts available to this process and the default for every widget."""
+    for path in glob.glob(os.path.join(FONT_DIR, "*.ttf")):
+        ctk.FontManager.load_font(path)
+    ctk.ThemeManager.theme["CTkFont"]["family"] = UI_FONT
+
+
 def load_settings() -> dict:
     try:
         with open(SETTINGS_PATH, encoding="utf-8") as f:
@@ -77,6 +89,10 @@ def load_settings() -> dict:
         settings = dict(DEFAULT_SETTINGS)
     if settings["language"] not in SPOKEN_LANGUAGES:
         settings["language"] = "auto"
+    if settings.pop("translate", False) and not settings["translate_to"]:
+        settings["translate_to"] = "en"  # the old "Translate subtitles to English" switch
+    if settings["translate_to"] not in SPOKEN_LANGUAGES:
+        settings["translate_to"] = ""
     return settings
 
 
@@ -114,6 +130,17 @@ def format_duration(seconds: float) -> str:
 def format_size(n: float) -> str:
     text = f"{n / 1e9:.1f} GB"
     return text.replace(".", ",") if current_language() in ("de", "es", "fr", "it", "nl", "pl", "pt") else text
+
+
+def translated_cues(cues: list[Cue], texts: list[str], style: CaptionStyle) -> list[Cue]:
+    """The cues with their text replaced; a cue left without words gives its time to the one before."""
+    out: list[Cue] = []
+    for cue, text in zip(cues, texts):
+        if text:
+            out.append(Cue(cue.start, cue.end, wrap(text, style.max_chars, style.max_lines)))
+        elif out:
+            out[-1].end = cue.end
+    return out
 
 
 def section(parent, text: str) -> None:
@@ -353,11 +380,13 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.cancel = threading.Event()
         self.worker: threading.Thread | None = None
         self.transcriber = None  # created once the engine has loaded
+        self.translator = None  # created the first time captions are translated
         self.settings_dialog: SettingsDialog | None = None
         self.studio = None  # the Caption Studio window, while open
         self.has_gpu = False  # an NVIDIA card is present (known once the engine thread checks)
         self.gpu_dl = {"state": "idle", "done": 0, "total": 0, "error": ""}  # idle|downloading|done|error
         self.gpu_cancel = threading.Event()
+        self.update_path = ""  # a downloaded installer for a newer version, run on restart
 
         self.title(APP_NAME)
         self.geometry("1100x780")
@@ -380,6 +409,8 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(100, self._poll)
         threading.Thread(target=self._load_engine, daemon=True).start()
+        if updater.enabled():
+            threading.Thread(target=self._check_update, daemon=True).start()
 
     # ---------- layout ----------
 
@@ -393,7 +424,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         header = ctk.CTkFrame(main, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 14))
         header.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(header, text=APP_NAME, font=ctk.CTkFont(size=26, weight="bold")) \
+        ctk.CTkLabel(header, text=APP_NAME, font=ctk.CTkFont(family=TITLE_FONT, size=30)) \
             .grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(header, text=t("tagline"), text_color=MUTED, font=ctk.CTkFont(size=13)) \
             .grid(row=1, column=0, sticky="w")
@@ -411,7 +442,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.drop.grid_columnconfigure(0, weight=1)
         self.drop.grid_rowconfigure((0, 4), weight=1)
         widgets = [
-            ctk.CTkLabel(self.drop, text="⬆", font=ctk.CTkFont(size=30), text_color=ACCENT),
+            ctk.CTkLabel(self.drop, text="⬆", font=ctk.CTkFont(size=30), text_color=ACCENT_TEXT),
             ctk.CTkLabel(self.drop, text=t("drop_title"), font=ctk.CTkFont(size=16, weight="bold")),
             ctk.CTkLabel(self.drop, text=t("drop_hint"), text_color=MUTED, font=ctk.CTkFont(size=12)),
         ]
@@ -466,9 +497,13 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         ctk.CTkOptionMenu(body, variable=self.lang_var, values=list(self.lang_labels),
                           command=lambda _: self._save(), **MENU_KW).pack(fill="x", padx=12)
 
-        self.translate_var = ctk.BooleanVar(value=self.settings["translate"])
-        ctk.CTkSwitch(body, text=t("translate_to_english"), variable=self.translate_var,
-                      progress_color=ACCENT, command=self._save).pack(anchor="w", padx=12, pady=(12, 0))
+        label(body, t("subtitle_language"))
+        self.target_labels = {t("same_as_spoken"): "", **{name: code for code, name in SPOKEN_LANGUAGES.items()}}
+        self.target_var = ctk.StringVar(value=SPOKEN_LANGUAGES.get(self.settings["translate_to"],
+                                                                   t("same_as_spoken")))
+        ctk.CTkOptionMenu(body, variable=self.target_var, values=list(self.target_labels),
+                          command=lambda _: self._save(), **MENU_KW).pack(fill="x", padx=12)
+        hint(body, t("translate_hint"))
 
         section(body, t("section_style"))
         self.preset_labels = {t(label_key): name for name, (label_key, _) in PRESET_TEXT.items()}
@@ -516,7 +551,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
                                          font=ctk.CTkFont(size=12))
         self.device_label.grid(row=0, column=0, sticky="w")
         self.gpu_link = ctk.CTkButton(footer, text=t("enable_gpu"), height=20, width=0, fg_color="transparent",
-                                      hover_color=("gray85", "gray25"), text_color=ACCENT,
+                                      hover_color=("gray85", "gray25"), text_color=ACCENT_TEXT,
                                       font=ctk.CTkFont(size=12, underline=True), command=self._open_settings)
         self.status_label = ctk.CTkLabel(footer, text=t("get_started"), anchor="w",
                                          justify="left", wraplength=280, font=ctk.CTkFont(size=12))
@@ -528,6 +563,9 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.cancel_btn = ctk.CTkButton(footer, text=t("cancel"), height=32, fg_color="transparent",
                                         border_width=1, border_color=ERR, text_color=ERR,
                                         hover_color=("gray85", "gray20"), command=self._cancel)
+        self.update_btn = ctk.CTkButton(footer, text="", height=30, fg_color="transparent", border_width=1,
+                                        border_color=OK, text_color=OK, hover_color=("gray85", "gray20"),
+                                        command=self._install_update)
 
         self._update_output_label()
         self._on_style_change(save=False)
@@ -572,7 +610,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.settings.update(
             model=self.model_labels[self.model_var.get()],
             language=self.lang_labels[self.lang_var.get()],
-            translate=self.translate_var.get(),
+            translate_to=self.target_labels[self.target_var.get()],
             preset=self._preset(),
             max_chars=int(self.chars_var.get()),
             max_lines=int(self.lines_var.get()),
@@ -614,11 +652,36 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
     def models_dir(self) -> str:
         return self.settings["models_dir"] or default_models_dir()
 
+    def load_translator(self, on_status):
+        """The caption translator, ready on the same device as the transcriber. Call from a worker thread."""
+        from .translate import Translator
+        if self.translator is None:
+            self.translator = Translator()
+        self.translator.load(self.models_dir(), self.transcriber.device, on_status)
+        return self.translator
+
     def apply_engine_settings(self) -> None:
         if self.transcriber is not None:
             self.transcriber.configure(self.models_dir(), self.settings["use_gpu"])
             if not self.busy():
                 self._show_device(self.transcriber.device)
+
+    def _check_update(self) -> None:
+        try:
+            found = updater.check_and_download()
+        except Exception as e:  # noqa: BLE001  (offline etc.: try again next start)
+            print(f"update check failed: {e!r}", flush=True)
+            return
+        if found:
+            self.messages.put(("update_ready", found))
+
+    def _install_update(self) -> None:
+        studio_busy = self.studio is not None and self.studio._task_running()  # incl. rendering
+        if self.busy() or studio_busy or self.gpu_dl["state"] == "downloading":
+            self._set_status(t("update_wait"))
+            return
+        updater.install(self.update_path)
+        self._on_close()
 
     def restart(self) -> None:
         if self.busy() or self.gpu_dl["state"] == "downloading":
@@ -756,7 +819,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         config = dict(
             model=self.model_labels[self.model_var.get()],
             language=None if lang == "auto" else lang,
-            translate=self.translate_var.get(),
+            target=self.target_labels[self.target_var.get()],
             style=self._caption_style(),
             save_txt=self.txt_var.get(),
             output_dir=self.settings["output_dir"],
@@ -770,8 +833,10 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
     def _run(self, cfg: dict) -> None:
         from .engine import Cancelled
+        from .translate import can_translate, joiner
 
         post = self.messages.put
+        target = cfg["target"]
         try:
             self.transcriber.load(cfg["model"], lambda s: post(("status", s)))
         except Exception as e:  # noqa: BLE001
@@ -789,23 +854,42 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             post(("clear_preview", None))
             post(("status", t("transcribing", name=os.path.basename(job.path))))
             try:
+                # Whisper translates into English itself; other languages are translated afterwards.
                 result = self.transcriber.transcribe(
-                    job.path, cfg["style"], cfg["language"], cfg["translate"],
+                    job.path, cfg["style"], cfg["language"], target == "en",
                     lambda pct, text, jid=job.id: post(("progress", (jid, pct, text))),
                     self.cancel,
                 )
                 if not result.cues:
                     raise RuntimeError(t("no_speech"))
+                cues, text = result.cues, result.text
+                language = "en" if target == "en" else result.language
+                if target and target != language:
+                    if not can_translate(language, target):
+                        raise RuntimeError(t("cant_translate", language=language))
+                    post(("status", t("translating", name=os.path.basename(job.path))))
+                    translator = self.load_translator(lambda s: post(("status", s)))
+                    texts = translator.translate(
+                        [" ".join(c.lines) for c in cues], language, target,
+                        lambda pct, jid=job.id: post(("row_status",
+                                                      (jid, pct, t("translating_pct", pct=int(pct * 100))))),
+                        self.cancel)
+                    cues = translated_cues(cues, texts, cfg["style"])
+                    text = joiner(target).join(x for x in texts if x)
+                    language = target
                 folder = cfg["output_dir"] or os.path.dirname(job.path)
                 stem = os.path.splitext(os.path.basename(job.path))[0]
+                if target:
+                    stem += f".{target}"  # e.g. video.es.srt, which players pick up as Spanish
                 srt_path = unique_path(os.path.join(folder, stem + ".srt"))
-                write_srt(srt_path, result.cues)
+                write_srt(srt_path, cues)
                 if cfg["save_txt"]:
                     with open(unique_path(os.path.join(folder, stem + ".txt")), "w", encoding="utf-8") as f:
-                        f.write(result.text + "\n")
+                        f.write(text + "\n")
                 job.status, job.output = "done", srt_path
-                summary = (f"{os.path.basename(srt_path)}  ·  {t('subtitle_count', n=len(result.cues))}  ·  "
-                           f"{format_duration(result.duration)}  ·  {result.language.upper()}")
+                spoken = result.language.upper() + (f" → {language.upper()}" if language != result.language else "")
+                summary = (f"{os.path.basename(srt_path)}  ·  {t('subtitle_count', n=len(cues))}  ·  "
+                           f"{format_duration(result.duration)}  ·  {spoken}")
                 post(("done", (job.id, srt_path, summary)))
                 done += 1
             except Cancelled:
@@ -847,6 +931,10 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             # None means the user cancelled
             self.gpu_dl.update(state="idle" if data is None else "error", error=data or "")
             self._refresh_gpu_dialog()
+        elif kind == "update_ready":
+            version, self.update_path = data
+            self.update_btn.configure(text=t("restart_to_update", version=version))
+            self.update_btn.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         elif kind == "engine_error":
             self.device_label.configure(text=t("engine_failed"), text_color=ERR)
             self._set_status(data)
@@ -867,6 +955,10 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
                 self.preview.insert("end", text + " ")
                 self.preview.see("end")
                 self.preview.configure(state="disabled")
+        elif kind == "row_status":
+            jid, pct, text = data
+            if jid in self.rows:
+                self.rows[jid].set_progress(pct, text)
         elif kind == "job_cancelled":
             if data in self.rows:
                 self.rows[data].set_progress(0, t("cancelled"))
@@ -920,8 +1012,9 @@ def _redirect_output() -> None:
     sys.stderr = sys.stderr or log
 
 
-def _selftest(path: str, model: str) -> int:
-    """Transcriber.exe --selftest <audio> [model]: one headless transcription, results in the log."""
+def _selftest(path: str, model: str, target: str = "") -> int:
+    """Transcriber.exe --selftest <audio> [model] [language]: one headless transcription (translated into
+    the language, if given), results in the log."""
     from .engine import Transcriber
 
     settings = load_settings()
@@ -933,11 +1026,20 @@ def _selftest(path: str, model: str) -> int:
         engine.load(model, print)
         result = engine.transcribe(path, PRESETS["Standard"], None, False, lambda pct, text: None,
                                    threading.Event())
+        text = result.text
+        if target:
+            from .translate import Translator
+            translator = Translator()
+            translator.load(settings["models_dir"] or default_models_dir(), engine.device, print)
+            texts = translator.translate([" ".join(c.lines) for c in result.cues], result.language, target,
+                                         lambda pct: None, threading.Event())
+            text = "\n".join(texts)
+            print(f"translated {result.language} -> {target} on {translator.device}", flush=True)
     except Exception as e:  # noqa: BLE001
         print(f"SELFTEST FAILED: {e!r}", flush=True)
         return 1
     print(f"device={engine.device}  language={result.language}  subtitles={len(result.cues)}", flush=True)
-    print(result.text, flush=True)
+    print(text, flush=True)
     print("SELFTEST OK", flush=True)
     return 0
 
@@ -945,7 +1047,7 @@ def _selftest(path: str, model: str) -> int:
 def main() -> None:
     _redirect_output()
     if len(sys.argv) >= 3 and sys.argv[1] == "--selftest":
-        sys.exit(_selftest(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "large-v3-turbo"))
+        sys.exit(_selftest(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "large-v3-turbo", *sys.argv[4:5]))
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Transcriber.App")
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -954,4 +1056,5 @@ def main() -> None:
     settings = load_settings()
     set_language(settings["ui_language"])
     ctk.set_appearance_mode(settings["appearance"])
+    load_fonts()
     App(settings).mainloop()

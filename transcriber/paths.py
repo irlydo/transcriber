@@ -9,6 +9,7 @@ FROZEN = getattr(sys, "frozen", False)
 # Read-only files shipped with the app (icon etc.). PyInstaller unpacks them to sys._MEIPASS.
 RESOURCE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ICON = os.path.join(RESOURCE_DIR, "assets", "icon.ico")
+FONT_DIR = os.path.join(RESOURCE_DIR, "assets", "fonts")
 
 # Per-user, writable locations. An installed app can't write next to itself (e.g. Program Files).
 SETTINGS_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP_NAME)

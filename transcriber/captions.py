@@ -117,7 +117,7 @@ class Look:
 LOOKS: dict[str, tuple[str, Look]] = {
     "pop": ("look_pop", Look()),
     "highlight": ("look_highlight", Look(font="Segoe UI Black", size=7.5, uppercase=True, word_effect="box",
-                                         highlight_color="#7C5CFF", outline=0.10, shadow=0.5)),
+                                         highlight_color="#C1121F", outline=0.10, shadow=0.5)),
     "clean": ("look_clean", Look(font="Segoe UI Bold", size=5.6, grouping="two", animation="fade",
                                  word_effect="none", outline=0.0, shadow=0.0, background=True,
                                  background_opacity=0.75)),
@@ -173,13 +173,19 @@ def retext(caption: Caption, text: str, original: list[Word]) -> None:
         return
     start = original[0].start if original else caption.start
     end = original[-1].end if original else caption.end
+    caption.words = spread(tokens, start, end)
+
+
+def spread(tokens: list[str], start: float, end: float, space: str = " ") -> list[Word]:
+    """Words for the tokens, sharing start to end in proportion to their length. space is "" for
+    languages written without spaces between words."""
     weights = [len(tok) + 1 for tok in tokens]
     total, t, words = sum(weights) or 1, start, []
     for tok, wgt in zip(tokens, weights):
         d = (end - start) * wgt / total
-        words.append(Word(t, t + d, " " + tok))
+        words.append(Word(t, t + d, space + tok))
         t += d
-    caption.words = words
+    return words
 
 
 def retime(caption: Caption, start: float, end: float) -> None:

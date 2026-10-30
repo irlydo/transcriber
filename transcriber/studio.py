@@ -14,10 +14,10 @@ import customtkinter as ctk
 from PIL import ImageTk
 from tkinterdnd2 import DND_FILES
 
-from .app import (ACCENT, ACCENT_HOVER, CARD, ERR, MENU_KW, MUTED, OK, OUTLINE_BTN_KW, SURFACE, VIDEO_EXTS,
-                  hint, save_settings, section, show_in_explorer, unique_path)
+from .app import (ACCENT, ACCENT_HOVER, ACCENT_TEXT, CARD, ERR, MENU_KW, MUTED, OK, OUTLINE_BTN_KW, SURFACE,
+                  TITLE_FONT, UI_FONT, VIDEO_EXTS, hint, save_settings, section, show_in_explorer, unique_path)
 from .captions import (ANIMATIONS, LOOKS, WORD_EFFECTS, Caption, Look, Renderer, all_words, available_fonts,
-                       caption_at, group_words, retext, retime)
+                       caption_at, group_words, retext, retime, spread)
 from .i18n import SPOKEN_LANGUAGES, t
 from .paths import DATA_DIR, ICON
 from .subtitles import PRESETS, Cue, Word, wrap, write_srt
@@ -30,8 +30,8 @@ EFFECT_TEXT = {"none": "effect_none", "color": "effect_color", "box": "effect_bo
                "reveal": "effect_reveal"}
 # Roughly where TikTok, Reels and Shorts put their buttons and captions: (left, top, right, bottom) margins
 SAFE_ZONE = (0.06, 0.10, 0.14, 0.22)
-ROW = ("gray95", "#24242B")
-ROW_NOW = ("#E4DEFF", "#2E2A45")
+ROW = ("gray95", "#1C1C1C")
+ROW_NOW = ("#F6DADA", "#3A1214")
 
 
 def fmt_time(seconds: float) -> str:
@@ -93,6 +93,7 @@ class StudioWindow(ctk.CTkToplevel):
         self.info = None
         self.player = None
         self.captions: list[Caption] = []
+        self.caption_lang = ""         # language the captions are in, once known
         self.renderer = Renderer()
         self.look = Look.from_dict(app.settings.get("caption_look") or {})
         self.selected = -1
@@ -145,7 +146,7 @@ class StudioWindow(ctk.CTkToplevel):
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.grid(row=0, column=0, columnspan=3, sticky="ew", padx=20, pady=(16, 10))
         header.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(header, text=t("studio_title"), font=ctk.CTkFont(size=22, weight="bold")) \
+        ctk.CTkLabel(header, text=t("studio_title"), font=ctk.CTkFont(family=TITLE_FONT, size=26)) \
             .grid(row=0, column=0, sticky="w", padx=(0, 18))
         self.file_label = ctk.CTkLabel(header, text=t("studio_tagline"), text_color=MUTED, anchor="w",
                                        font=ctk.CTkFont(size=13))
@@ -158,7 +159,7 @@ class StudioWindow(ctk.CTkToplevel):
         box.grid(row=1, column=0, sticky="nsew", padx=(20, 8), pady=(0, 20))
         box.grid_columnconfigure(0, weight=1)
         box.grid_rowconfigure(0, weight=1)
-        self.canvas = tk.Canvas(box, bg="#0B0B0E", highlightthickness=0, bd=0)
+        self.canvas = tk.Canvas(box, bg="#000000", highlightthickness=0, bd=0)
         self.canvas.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 6))
         self.canvas.bind("<Configure>", lambda e: self._layout_canvas())
         self.canvas.bind("<ButtonPress-1>", self._canvas_press)
@@ -250,10 +251,15 @@ class StudioWindow(ctk.CTkToplevel):
         self.list_head.grid(row=3, column=0, sticky="ew", padx=12, pady=(10, 0))
         self.list_head.grid_columnconfigure(0, weight=1)
         self.count_label = ctk.CTkLabel(self.list_head, text="", text_color=MUTED, font=ctk.CTkFont(size=12))
-        self.count_label.grid(row=0, column=0, sticky="w")
+        self.count_label.grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        self.target_labels = {name: code for code, name in SPOKEN_LANGUAGES.items()}
+        self.translate_menu = ctk.CTkOptionMenu(self.list_head, values=list(self.target_labels), width=130,
+                                                height=28, variable=ctk.StringVar(value=t("translate_menu")),
+                                                command=self._translate, state="disabled", **MENU_KW)
+        self.translate_menu.grid(row=0, column=1, padx=(0, 6))
         self.add_btn = ctk.CTkButton(self.list_head, text=t("add_caption"), width=0, command=self._add,
                                      state="disabled", **OUTLINE_BTN_KW)
-        self.add_btn.grid(row=0, column=1)
+        self.add_btn.grid(row=0, column=2)
 
         self.list = ctk.CTkScrollableFrame(box, fg_color="transparent")
         self.list.grid(row=4, column=0, sticky="nsew", padx=6, pady=(4, 10))
@@ -516,6 +522,7 @@ class StudioWindow(ctk.CTkToplevel):
             w.configure(state="normal")
         self._layout_canvas()
 
+        self.caption_lang = ""
         restored = self._restore_session()
         if restored:
             self._set_captions(restored)
@@ -540,6 +547,7 @@ class StudioWindow(ctk.CTkToplevel):
         state = "normal" if captions else "disabled"
         self.render_btn.configure(state=state if not self._task_running() else "disabled")
         self.srt_btn.configure(state=state)
+        self.translate_menu.configure(state=state if not self._task_running() else "disabled")
         self.transcribe_btn.configure(text=t("retranscribe") if captions else t("transcribe"))
         self._changed()
 
@@ -717,6 +725,7 @@ class StudioWindow(ctk.CTkToplevel):
             return
         try:
             data = {"path": self.info.path, "size": os.path.getsize(self.info.path),
+                    "language": self.caption_lang,
                     "captions": [{"start": c.start, "end": c.end,
                                   "words": [[w.start, w.end, w.text] for w in c.words]} for c in self.captions]}
             os.makedirs(DATA_DIR, exist_ok=True)
@@ -732,6 +741,7 @@ class StudioWindow(ctk.CTkToplevel):
             if data["path"] != self.info.path or data["size"] != os.path.getsize(self.info.path):
                 return None
             captions = [Caption(c["start"], c["end"], [Word(*w) for w in c["words"]]) for c in data["captions"]]
+            self.caption_lang = data.get("language", "") if captions else ""
             return captions or None
         except (OSError, ValueError, KeyError, TypeError):
             return None
@@ -742,7 +752,7 @@ class StudioWindow(ctk.CTkToplevel):
         return self.task is not None and self.task.is_alive()
 
     def engine_busy(self) -> bool:
-        return self._task_running() and self.task_kind == "transcribe"
+        return self._task_running() and self.task_kind in ("transcribe", "translate")
 
     def _transcribe(self) -> None:
         if self.info is None or self._task_running():
@@ -773,11 +783,68 @@ class StudioWindow(ctk.CTkToplevel):
             post(("status", t("transcribing", name=os.path.basename(cfg["path"]))))
             result = engine.transcribe(cfg["path"], PRESETS["Social"], cfg["language"], False,
                                        lambda pct, text: post(("progress", pct)), self.cancel)
-            post(("words", result.words))
+            post(("words", (result.words, result.language)))
         except Cancelled:
             post(("cancelled", None))
         except Exception as e:  # noqa: BLE001
             post(("failed", t("transcribe_failed", error=str(e) or e.__class__.__name__)))
+
+    def _translate(self, choice: str) -> None:
+        self.translate_menu.set(t("translate_menu"))
+        target = self.target_labels[choice]
+        if not self.captions or self._task_running():
+            return
+        if self.app.transcriber is None:
+            self._status(t("engine_not_ready"))
+            return
+        if self.app.worker is not None and self.app.worker.is_alive():
+            self._status(t("queue_running"))
+            return
+        # Captions from before languages were remembered: go by the language menu.
+        source = self.caption_lang or self.lang_labels[self.lang_var.get()]
+        if source == target:
+            self._status(t("already_in_language", language=choice))
+            return
+        from .translate import can_translate
+        if source == "auto" or not can_translate(source, target):
+            self._status(t("cant_translate", language=SPOKEN_LANGUAGES.get(source, source)), ERR)
+            return
+        if not messagebox.askyesno(t("translate_menu"), t("translate_confirm", language=choice),
+                                   parent=self):
+            return
+        if self.player is not None:
+            self.player.pause()
+        self._begin("translate")
+        texts = [c.text for c in self.captions]
+        self.task = threading.Thread(target=self._run_translate, args=(texts, source, target), daemon=True)
+        self.task.start()
+
+    def _run_translate(self, texts: list[str], source: str, target: str) -> None:
+        from .engine import Cancelled
+        post = self.messages.put
+        try:
+            translator = self.app.load_translator(lambda s: post(("status", s)))
+            post(("status", t("translating_pct", pct=0)))
+            out = translator.translate(texts, source, target, lambda pct: post(("translate_progress", pct)),
+                                       self.cancel)
+            post(("translated", (out, target)))
+        except Cancelled:
+            post(("cancelled", None))
+        except Exception as e:  # noqa: BLE001
+            post(("failed", t("translate_failed", error=str(e) or e.__class__.__name__)))
+
+    def _apply_translation(self, texts: list[str], language: str) -> None:
+        from .translate import joiner
+        space = joiner(language)
+        words: list[Word] = []
+        for cap, text in zip(self.captions, texts):
+            tokens = text.split() if space else [ch for ch in text if not ch.isspace()]
+            start = cap.words[0].start if cap.words else cap.start
+            end = cap.words[-1].end if cap.words else cap.end
+            words += spread(tokens, start, end, space)
+        self.caption_lang = language
+        # Translations run longer or shorter than the original, so share them out afresh.
+        self._set_captions(group_words(words, self.look.grouping))
 
     def _render(self) -> None:
         if self.info is None or not self.captions or self._task_running():
@@ -817,7 +884,7 @@ class StudioWindow(ctk.CTkToplevel):
     def _begin(self, kind: str) -> None:
         self.task_kind = kind
         self.cancel.clear()
-        for w in (self.transcribe_btn, self.render_btn):
+        for w in (self.transcribe_btn, self.render_btn, self.translate_menu):
             w.configure(state="disabled")
         self.task_bar.set(0)
         self.task_bar.grid(row=1, column=0, sticky="ew", pady=(4, 0))
@@ -828,6 +895,7 @@ class StudioWindow(ctk.CTkToplevel):
         self.cancel_btn.grid_remove()
         self.transcribe_btn.configure(state="normal" if self.info else "disabled")
         self.render_btn.configure(state="normal" if self.captions else "disabled")
+        self.translate_menu.configure(state="normal" if self.captions else "disabled")
 
     def _handle(self, kind: str, data) -> None:
         if kind == "status":
@@ -837,10 +905,20 @@ class StudioWindow(ctk.CTkToplevel):
             self._status(t("transcribing_pct", pct=int(data * 100)))
         elif kind == "words":
             self._end()
-            captions = group_words(data, self.look.grouping)
+            words, self.caption_lang = data
+            captions = group_words(words, self.look.grouping)
             self._set_captions(captions)
             self._status(t("transcribed", n=len(captions)) if captions else t("no_speech"),
                          OK if captions else ERR)
+        elif kind == "translate_progress":
+            self.task_bar.set(data)
+            self._status(t("translating_pct", pct=int(data * 100)))
+        elif kind == "translated":
+            self._end()
+            texts, language = data
+            self._apply_translation(texts, language)
+            self._status(t("translated", language=SPOKEN_LANGUAGES.get(language, language), n=len(self.captions)),
+                         OK)
         elif kind == "render_progress":
             self.task_bar.set(data)
             self._status(t("rendering", pct=int(data * 100)))
@@ -905,9 +983,9 @@ class StudioWindow(ctk.CTkToplevel):
     def _draw_empty(self) -> None:
         self.canvas.delete("all")
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
-        self.canvas.create_text(cw / 2, ch / 2 - 16, text="🎬", font=("Segoe UI Emoji", 30), fill="#7C5CFF")
+        self.canvas.create_text(cw / 2, ch / 2 - 16, text="🎬", font=("Segoe UI Emoji", 30), fill=ACCENT_TEXT[1])
         self.canvas.create_text(cw / 2, ch / 2 + 26, text=t("studio_drop"), fill="#9A9AA5",
-                                font=("Segoe UI", 12), width=max(100, cw - 40), justify="center")
+                                font=(UI_FONT, 12), width=max(100, cw - 40), justify="center")
 
     def _tick(self) -> None:
         try:

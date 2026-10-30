@@ -66,7 +66,9 @@ class Transcriber:
             return
         self._model = None
         os.makedirs(self.models_dir, exist_ok=True)
-        local = glob.glob(os.path.join(self.models_dir, f"models--*--faster-whisper-{model_name}"))
+        # The folder appears as soon as a download starts, so look for the finished model itself.
+        local = glob.glob(os.path.join(self.models_dir, f"models--*--faster-whisper-{model_name}", "snapshots",
+                                       "*", "model.bin"))
         on_status(t("loading_model" if local else "downloading_model", model=model_name))
         compute = "float16" if self.device == "cuda" else "int8"
         try:

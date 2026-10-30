@@ -9,7 +9,8 @@ ROOT = os.path.dirname(SPECPATH)
 a = Analysis(
     [os.path.join(ROOT, "main.py")],
     pathex=[ROOT],
-    datas=[(os.path.join(ROOT, "assets", "icon.ico"), "assets")]
+    datas=[(os.path.join(ROOT, "assets", "icon.ico"), "assets"),
+           (os.path.join(ROOT, "assets", "fonts"), os.path.join("assets", "fonts"))]
     + collect_data_files("customtkinter")
     + collect_data_files("faster_whisper")  # the Silero VAD model
     + copy_metadata("hf_xet")  # huggingface_hub checks for it by version before using fast downloads
