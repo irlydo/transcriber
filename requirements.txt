@@ -1,0 +1,12 @@
+faster-whisper>=1.1.0
+customtkinter>=5.2.2
+tkinterdnd2>=0.4.2
+pillow>=10.0
+numpy
+# audio playback in Caption Studio
+sounddevice>=0.4.6
+# GPU acceleration (NVIDIA). Harmless on machines without an NVIDIA card.
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*
+# faster-whisper passes an argument newer PyAV releases removed
+av>=12,<16
