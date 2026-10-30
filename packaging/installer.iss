@@ -34,6 +34,9 @@ ShowLanguageDialog=auto
 ; Setup's RedirectionGuard is inherited by the app it launches (after installing or updating), which then
 ; can't follow the symlinks in the Hugging Face model cache: "[WinError 448] ... untrusted mount point".
 RedirectionGuard=no
+; Close a running copy of the app even if it doesn't answer (e.g. one stuck while exiting, with no window),
+; instead of failing and rolling back the update.
+CloseApplications=force
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"

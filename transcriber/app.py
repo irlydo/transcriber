@@ -999,7 +999,19 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             if self.studio.player is not None:
                 self.studio.player.close()
         self.destroy()
-        os._exit(0)  # don't wait on a model download / transcription thread
+        exit_now()
+
+
+def exit_now() -> None:
+    """End the process at once, without waiting on a model download / transcription thread. TerminateProcess
+    rather than os._exit: that still runs native libraries' shutdown code (CUDA, OpenMP), which can hang and
+    leave an invisible process behind that keeps the app's files locked, so updates roll back."""
+    try:
+        k32 = ctypes.windll.kernel32
+        k32.GetCurrentProcess.restype = ctypes.c_void_p
+        k32.TerminateProcess(ctypes.c_void_p(k32.GetCurrentProcess()), 0)
+    finally:
+        os._exit(0)
 
 
 def _redirect_output() -> None:
