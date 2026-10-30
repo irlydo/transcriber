@@ -31,6 +31,9 @@ WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
 ShowLanguageDialog=auto
+; Setup's RedirectionGuard is inherited by the app it launches (after installing or updating), which then
+; can't follow the symlinks in the Hugging Face model cache: "[WinError 448] ... untrusted mount point".
+RedirectionGuard=no
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
