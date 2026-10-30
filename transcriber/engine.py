@@ -14,6 +14,11 @@ from .subtitles import CaptionStyle, Cue, Word, build_cues
 
 _CUDNN_AVAILABLE = gpu_pack.register_dlls()
 
+# huggingface_hub's shared blob store moves a finished download into a shared folder and swaps in a link,
+# which can still be happening when the model is opened ("Unable to open file 'model.bin'"). Keep plain
+# files instead. Must be set before huggingface_hub is imported (it reads this once).
+os.environ.setdefault("HF_HUB_DISABLE_SHARED_BLOBS", "1")
+
 import ctranslate2  # noqa: E402  (must come after DLL registration)
 from faster_whisper import WhisperModel, decode_audio  # noqa: E402
 
