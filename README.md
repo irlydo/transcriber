@@ -8,7 +8,7 @@
   <img src="assets/download-windows.svg" alt="Download for Windows" width="380">
 </a>
 
-<sub>Windows 10 &amp; 11 (64-bit) · <a href="https://github.com/irlydo/transcriber/releases/latest">All downloads</a></sub>
+<sub>Windows 10 &amp; 11 (64-bit) · <a href="https://github.com/irlydo/transcriber/releases/latest">All downloads</a> · No install? <a href="https://endingboredom.com/transcriber">Use it in your browser</a></sub>
 
 <br><br>
 
